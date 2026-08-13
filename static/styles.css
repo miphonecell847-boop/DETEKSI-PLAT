@@ -341,6 +341,7 @@ input[type="range"] {
   accent-color: var(--primary);
 }
 
+
 .button-stack,
 .image-actions {
   display: grid;

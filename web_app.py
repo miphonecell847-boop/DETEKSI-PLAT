@@ -1042,6 +1042,15 @@ class WebPlateDetector:
     def save_pending_detection(self, owner_name=None, plate_date=None, plate_number=None):
         with self.lock:
             pending = dict(self.pending_detection) if self.pending_detection else None
+            if pending is None and self.registration_status == "unregistered" and self._has_plate_text(self.plate_text):
+                pending = {
+                    "plate_number": self.plate_text,
+                    "plate_date": self.plate_date,
+                    "source": "live",
+                    "image_url": self.last_image_url,
+                    "threshold": self.threshold,
+                    "ocr_mode": "fast",
+                }
 
         if pending is None:
             return False, {
@@ -1356,11 +1365,14 @@ def upload():
 @login_required
 def add_detection():
     data = request.get_json(silent=True) or {}
-    ok, data = detector_state.save_pending_detection(
-        plate_number=data.get("plateNumber"),
-        owner_name=data.get("ownerName"),
-        plate_date=data.get("plateDate"),
-    )
+    try:
+        ok, data = detector_state.save_pending_detection(
+            plate_number=data.get("plateNumber"),
+            owner_name=data.get("ownerName"),
+            plate_date=data.get("plateDate"),
+        )
+    except (ValueError, pymysql.MySQLError) as exc:
+        return jsonify({"ok": False, "message": f"Data gagal disimpan: {exc}"}), 400
     return jsonify(data), 200 if ok else 400
 
 

@@ -48,7 +48,11 @@ async function postJson(url, body = {}) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
-  return response.json();
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(data.message || "Request gagal");
+  }
+  return data;
 }
 
 function scheduleConfig() {
@@ -66,12 +70,16 @@ function scheduleConfig() {
 function renderState(state) {
   currentState = state;
   const busy = Boolean(state.loadingModel || state.processingImage);
+  const canAddVehicle = Boolean(
+    state.hasPendingDetection ||
+    (state.registrationStatus === "unregistered" && hasDetectedPlate(state.plate))
+  );
   cameraButton.textContent = state.running ? "Stop Kamera" : "Mulai Kamera";
   detectButton.textContent = state.detecting || state.loadingModel ? "Stop Deteksi" : "Mulai Deteksi";
   detectButton.disabled = !state.running || state.processingImage;
   captureButton.disabled = !state.running || busy;
   uploadButton.disabled = busy;
-  addDataButton.disabled = busy || !state.hasPendingDetection;
+  addDataButton.disabled = busy || !canAddVehicle;
   cameraInput.disabled = state.running || busy;
   ocrModeInput.disabled = busy;
   cudaInput.disabled = Boolean(state.detectorLoaded || state.running || busy);
@@ -118,7 +126,7 @@ function renderVehicleState(state) {
   vehicleDateWarning.hidden = true;
   vehicleDateWarning.textContent = "-";
 
-  if (status === "unregistered" && state.hasPendingDetection) {
+  if (status === "unregistered" && hasDetectedPlate(state.plate)) {
     newVehicleForm.hidden = false;
     addDataButton.textContent = "Tambah Data Kendaraan";
     if (!plateNumberInput.value || plateNumberInput.dataset.fromDetection !== state.plate) {
@@ -134,6 +142,11 @@ function renderVehicleState(state) {
 
   newVehicleForm.hidden = true;
   addDataButton.textContent = "Tambah Data Kendaraan";
+}
+
+function hasDetectedPlate(value) {
+  const plate = String(value || "").trim().toLowerCase();
+  return plate !== "" && plate !== "-" && plate !== "not detected";
 }
 
 function normalizePlateDate(value) {
@@ -303,7 +316,10 @@ addDataButton.addEventListener("click", async () => {
   } catch (error) {
     statusText.textContent = `Tambah data error: ${error.message}`;
   } finally {
-    addDataButton.disabled = !currentState.hasPendingDetection || currentState.loadingModel || currentState.processingImage;
+    addDataButton.disabled = !(
+      currentState.hasPendingDetection ||
+      (currentState.registrationStatus === "unregistered" && hasDetectedPlate(currentState.plate))
+    ) || currentState.loadingModel || currentState.processingImage;
   }
 });
 
